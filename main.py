@@ -1,14 +1,9 @@
-import json
 import asyncio
+import json
 import os
 
-try:
-    import discord  # type: ignore[import-not-found]
-    from discord.ext import commands  # type: ignore[import-not-found]
-except ModuleNotFoundError as exc:
-    raise SystemExit(
-        "Discord.py non è installato. Esegui: pip install discord.py"
-    ) from exc
+import discord
+from discord.ext import commands
 
 # 1. Caricamento del token dal file token.json
 with open("token.json", "r") as f:
