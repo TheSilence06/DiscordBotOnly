@@ -1,8 +1,14 @@
 import json
 import asyncio
 import os
-import discord
-from discord.ext import commands
+
+try:
+    import discord  # type: ignore[import-not-found]
+    from discord.ext import commands  # type: ignore[import-not-found]
+except ModuleNotFoundError as exc:
+    raise SystemExit(
+        "Discord.py non è installato. Esegui: pip install discord.py"
+    ) from exc
 
 # 1. Caricamento del token dal file token.json
 with open("token.json", "r") as f:
@@ -18,29 +24,49 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 # 3. Evento di avvio e Sincronizzazione dei Comandi Slash
 @bot.event
 async def on_ready():
-    print(f"Loggato come {bot.user} (ID: {bot.user.id})")
+    print(f"✅ Loggato come {bot.user} (ID: {bot.user.id})")
     try:
         # Pulisce la cache locale dei comandi globali ed effettua il sync con Discord
         synced = await bot.tree.sync()
-        print(f"Sincronizzati {len(synced)} comandi Slash con successo!")
+        print(f"✅ Sincronizzati {len(synced)} comandi Slash con successo!")
+        print(f"\n📋 Comandi caricati:")
+        for cmd in bot.tree.get_commands():
+            print(f"   ✓ /{cmd.name}: {cmd.description}")
     except Exception as e:
-        print(f"Errore durante la sincronizzazione dei comandi: {e}")
+        print(f"❌ Errore durante la sincronizzazione dei comandi: {e}")
 
 # ==========================================
-# 4. DEFINIZIONE DEI COMANDI SLASH
+# 4. CARICAMENTO DEI COGS
 # ==========================================
 
-@bot.tree.command(name="goodgirl", description="Da del goodgirl all'utente")
-async def goodgirl(interaction: discord.Interaction):
-    await interaction.response.send_message(f"Brava ragazza, {interaction.user.mention}!")
+async def load_cogs():
+    """Carica tutti i cogs dalla cartella 'cogs'"""
+    for filename in os.listdir("cogs"):
+        if filename.endswith(".py") and filename != "__init__.py":
+            try:
+                await bot.load_extension(f"cogs.{filename[:-3]}")
+                print(f"✓ Caricato cog: {filename}")
+            except Exception as e:
+                print(f"✗ Errore nel caricamento di {filename}: {e}")
 
-@bot.tree.command(name="tv", description="Sposta lollo quando c'è la tv")
-async def tv(interaction: discord.Interaction):
-    await interaction.response.send_message("Comando TV eseguito!")
+# ==========================================
+# 5. EVENTO DI AVVIO CON CARICAMENTO COGS
+# ==========================================
 
-@bot.tree.command(name="harucenagay", description="Sposta haru nel canale cena (cucina di haru)")
-async def harucenagay(interaction: discord.Interaction):
-    await interaction.response.send_message("Haru spostato nel canale cena!")
+@bot.event
+async def on_ready_cogs():
+    """Esegue una volta al primo avvio"""
+    if not hasattr(bot, 'cogs_loaded'):
+        await load_cogs()
+        bot.cogs_loaded = True
+        print(f"\n📋 Comandi disponibili:")
+        for cmd in bot.tree.get_commands():
+            print(f"   - /{cmd.name}: {cmd.description}")
 
 # Avvio del bot
-bot.run(TOKEN)
+async def main():
+    async with bot:
+        await load_cogs()
+        await bot.start(TOKEN)
+
+asyncio.run(main())
