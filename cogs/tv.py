@@ -7,9 +7,8 @@ import threading
 import wave
 
 import discord
-import voice_recv
 from discord import app_commands
-from discord.ext import commands
+from discord.ext import commands, voice_recv
 from openai import AsyncOpenAI
 
 
