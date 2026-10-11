@@ -3,9 +3,9 @@ import logging
 import shutil
 from pathlib import Path
 
-import discord
-from discord import app_commands
-from discord.ext import commands
+import discord # type: ignore[import-not-found]
+from discord import app_commands # type: ignore[import-not-found]
+from discord.ext import commands # type: ignore[import-not-found]
 
 
 logger = logging.getLogger(__name__)
