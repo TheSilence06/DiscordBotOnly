@@ -21,7 +21,22 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-# 3. Evento di avvio e Sincronizzazione dei Comandi Slash
+# 3. Funzione per il caricamento dei Cogs
+async def load_cogs():
+    """Carica tutti i cogs dalla cartella 'cogs'"""
+    if os.path.exists("cogs"):
+        for filename in os.listdir("cogs"):
+            if filename.endswith(".py") and filename != "__init__.py":
+                cog_name = f"cogs.{filename[:-3]}"
+                try:
+                    # Evita di ricaricare lo stesso cog se già presente
+                    if cog_name not in bot.extensions:
+                        await bot.load_extension(cog_name)
+                        print(f"✓ Caricato cog: {filename}")
+                except Exception as e:
+                    print(f"✗ Errore nel caricamento di {filename}: {e}")
+
+# 4. Evento di avvio e Sincronizzazione dei Comandi Slash
 @bot.event
 async def on_ready():
     print(f"✅ Loggato come {bot.user} (ID: {bot.user.id})")
@@ -35,35 +50,7 @@ async def on_ready():
     except Exception as e:
         print(f"❌ Errore durante la sincronizzazione dei comandi: {e}")
 
-# ==========================================
-# 4. CARICAMENTO DEI COGS
-# ==========================================
-
-async def load_cogs():
-    """Carica tutti i cogs dalla cartella 'cogs'"""
-    for filename in os.listdir("cogs"):
-        if filename.endswith(".py") and filename != "__init__.py":
-            try:
-                await bot.load_extension(f"cogs.{filename[:-3]}")
-                print(f"✓ Caricato cog: {filename}")
-            except Exception as e:
-                print(f"✗ Errore nel caricamento di {filename}: {e}")
-
-# ==========================================
-# 5. EVENTO DI AVVIO CON CARICAMENTO COGS
-# ==========================================
-
-@bot.event
-async def on_ready_cogs():
-    """Esegue una volta al primo avvio"""
-    if not hasattr(bot, 'cogs_loaded'):
-        await load_cogs()
-        bot.cogs_loaded = True
-        print(f"\n📋 Comandi disponibili:")
-        for cmd in bot.tree.get_commands():
-            print(f"   - /{cmd.name}: {cmd.description}")
-
-# Avvio del bot
+# 5. Avvio principale del bot con gestione asincrona pulita
 async def main():
     async with bot:
         await load_cogs()
