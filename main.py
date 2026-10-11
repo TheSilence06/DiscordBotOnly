@@ -29,40 +29,38 @@ async def load_cogs():
             if filename.endswith(".py") and filename != "__init__.py":
                 cog_name = f"cogs.{filename[:-3]}"
                 try:
-                    # Evita di ricaricare lo stesso cog se già presente
                     if cog_name not in bot.extensions:
                         await bot.load_extension(cog_name)
                         print(f"✓ Caricato cog: {filename}")
                 except Exception as e:
                     print(f"✗ Errore nel caricamento di {filename}: {e}")
 
-# 4. Evento di avvio, Pulizia forzata e Sincronizzazione dei Comandi Slash
+# 4. Evento di avvio e Sincronizzazione dei Comandi corretta
 @bot.event
 async def on_ready():
     print(f"✅ Loggato come {bot.user} (ID: {bot.user.id})")
     try:
-        # A. Pulisce i comandi globali vecchi/duplicati
-        bot.tree.clear_commands(guild=None)
-        
-        # B. Pulisce eventuali comandi di gilda (server) rimasti bloccati
+        # A. Pulisce eventuali comandi di gilda (server) rimasti bloccati
         for guild in bot.guilds:
             bot.tree.clear_commands(guild=guild)
             await bot.tree.sync(guild=guild)
             print(f"🧹 Puliti i comandi locali per il server: {guild.name} ({guild.id})")
 
-        # C. Effettua il sync globale pulito dei comandi attuali
+        # B. Effettua il sync globale dei comandi caricati dai cogs
         synced = await bot.tree.sync()
         print(f"✅ Sincronizzati {len(synced)} comandi Slash globali con successo!")
         
         print(f"\n📋 Comandi attualmente attivi:")
         for cmd in bot.tree.get_commands():
             print(f"   ✓ /{cmd.name}: {cmd.description}")
+            
     except Exception as e:
         print(f"❌ Errore durante la sincronizzazione dei comandi: {e}")
 
-# 5. Avvio principale del bot con gestione asincrona pulita
+# 5. Avvio principale del bot con caricamento preventivo dei Cogs
 async def main():
     async with bot:
+        # Carichiamo i cogs PRIMA di avviare il bot, così on_ready li troverà già pronti
         await load_cogs()
         await bot.start(TOKEN)
 
