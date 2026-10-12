@@ -18,7 +18,7 @@ LISTEN_DURATION_SECONDS = 5 * 60
 AUDIO_SAMPLE_RATE = 48_000
 AUDIO_CHANNELS = 2
 AUDIO_SAMPLE_WIDTH = 2
-CHUNK_DURATION_SECONDS = 3
+CHUNK_DURATION_SECONDS = 5
 CHUNK_SIZE_BYTES = (
     AUDIO_SAMPLE_RATE
     * AUDIO_CHANNELS
@@ -26,11 +26,18 @@ CHUNK_SIZE_BYTES = (
     * CHUNK_DURATION_SECONDS
 )
 MIN_PARTIAL_CHUNK_SIZE_BYTES = (
-    AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * AUDIO_SAMPLE_WIDTH // 2
+    AUDIO_SAMPLE_RATE * AUDIO_CHANNELS * AUDIO_SAMPLE_WIDTH * 2
 )
 PARTIAL_FLUSH_INTERVAL_SECONDS = 0.5
 MAX_QUEUED_CHUNKS = 30
-KEYWORD_PATTERN = re.compile(r"\btelevisione\b", re.IGNORECASE)
+KEYWORD_PATTERN = re.compile(
+    r"\b(?:t\.?\s*v\.?|tiv[ùu]|televis(?:ione|ioni|ore|ori))\b",
+    re.IGNORECASE,
+)
+TRANSCRIPTION_PROMPT = (
+    "Trascrizione in italiano. Parole chiave: TV, tivù, televisione, "
+    "televisioni, televisore, televisori."
+)
 
 
 class _SpeechCapture(voice_recv.AudioSink):
@@ -110,7 +117,7 @@ class TvCommand(commands.Cog):
 
     @app_commands.command(
         name="tv",
-        description="Ascolta per 5 minuti e sposta l'utente quando sente 'televisione'",
+        description="Ascolta per 5 minuti e sposta l'utente quando sente una parola sulla TV",
     )
     @app_commands.describe(utente="L'utente da spostare nel canale TV")
     async def tv(
@@ -186,7 +193,7 @@ class TvCommand(commands.Cog):
         worker: asyncio.Task[bool] | None = None
         flush_worker: asyncio.Task[None] | None = None
         client: AsyncOpenAI | None = None
-        status = "Tempo scaduto: non ho sentito «televisione»."
+        status = "Tempo scaduto: non ho sentito «TV», «televisore» o «televisione»."
         try:
             await interaction.response.send_message(
                 "Avvio l'ascolto per un massimo di 5 minuti. I segmenti audio del "
@@ -207,6 +214,7 @@ class TvCommand(commands.Cog):
                         model="whisper-1",
                         file=("voice.wav", _to_wav(pcm), "audio/wav"),
                         language="it",
+                        prompt=TRANSCRIPTION_PROMPT,
                     )
                     if KEYWORD_PATTERN.search(transcript.text):
                         return True
@@ -229,10 +237,10 @@ class TvCommand(commands.Cog):
 
             if keyword_heard:
                 if utente.voice is None or utente.voice.channel is None:
-                    status = f"Ho sentito «televisione», ma {utente.mention} non è più in vocale."
+                    status = f"Ho sentito una parola sulla TV, ma {utente.mention} non è più in vocale."
                 else:
                     await utente.move_to(destination, reason="Comando /tv: parola rilevata")
-                    status = f"Ho sentito «televisione» e ho spostato {utente.mention}."
+                    status = f"Ho sentito una parola sulla TV e ho spostato {utente.mention}."
         except Exception:
             logger.exception("Errore durante il comando /tv")
             status = (
