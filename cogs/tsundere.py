@@ -70,6 +70,10 @@ class TsundereCommand(commands.Cog):
                 raise RuntimeError("Il bot è già collegato a un canale vocale.")
 
             voice_client = await member.voice.channel.connect()
+            await interaction.guild.change_voice_state(
+                channel=voice_client.channel,
+                self_mute=False,
+            )
             loop = asyncio.get_running_loop()
             playback_done: asyncio.Future[None] = loop.create_future()
 
