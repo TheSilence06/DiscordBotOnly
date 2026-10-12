@@ -1,2 +1,3 @@
 .ssh/
 token.json
+.env

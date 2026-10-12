@@ -1,9 +1,13 @@
 import asyncio
 import json
 import os
+from pathlib import Path
 
 import discord
 from discord.ext import commands
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 # 1. Caricamento del token dal file token.json
 with open("token.json", "r") as f:
