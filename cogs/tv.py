@@ -292,6 +292,7 @@ class TvCommand(commands.Cog):
                 "Non sono riuscito a completare il comando. Controlla la connessione "
                 "vocale, i permessi del bot e la configurazione OpenAI."
             )
+            
         finally:
             if voice_client is not None and voice_client.is_listening():
                 try:
@@ -308,6 +309,9 @@ class TvCommand(commands.Cog):
                 if voice_client.is_connected():
                     try:
                         await voice_client.disconnect(force=True)
+                        # Aggiungiamo un secondo di pausa per permettere a Discord 
+                        # di rilasciare completamente il canale vocale ed evitare blocchi nei comandi futuri
+                        await asyncio.sleep(1.0)
                     except Exception:
                         logger.exception("Errore durante l'uscita dal canale vocale")
                         status = "Non sono riuscito a uscire dal canale vocale."
