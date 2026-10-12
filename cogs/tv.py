@@ -3,6 +3,7 @@ import io
 import logging
 import os
 import re
+import struct
 import threading
 import wave
 
@@ -15,6 +16,8 @@ from openai import AsyncOpenAI
 logger = logging.getLogger(__name__)
 DESTINATION_CHANNEL_ID = 1558247025991229573
 LISTEN_DURATION_SECONDS = 5 * 60
+
+# Parametri audio originali catturati da Discord
 AUDIO_SAMPLE_RATE = 48_000
 AUDIO_CHANNELS = 2
 AUDIO_SAMPLE_WIDTH = 2
@@ -30,14 +33,49 @@ MIN_PARTIAL_CHUNK_SIZE_BYTES = (
 )
 PARTIAL_FLUSH_INTERVAL_SECONDS = 0.5
 MAX_QUEUED_CHUNKS = 30
+
 KEYWORD_PATTERN = re.compile(
-    r"\b(?:t\.?\s*v\.?|tiv[ùu]|televis(?:ione|ioni|ore|ori))\b",
+    r"\b(?:t\.?\s*v\.?|tiv[ùu]?|televis(?:ione|ioni|ore|ori))\b",
     re.IGNORECASE,
 )
 TRANSCRIPTION_PROMPT = (
     "Trascrizione in italiano. Parole chiave: TV, tivù, televisione, "
     "televisioni, televisore, televisori."
 )
+
+
+def convert_pcm_48k_stereo_to_16k_mono(pcm_data: bytes) -> bytes:
+    """
+    Converte il flusso PCM da 48kHz Stereo (2 canali, 16-bit) a 16kHz Mono (1 canale, 16-bit)
+    per massimizzare la precisione e la compatibilità con le API di OpenAI Whisper.
+    """
+    frame_size = 4  # 2 canali * 2 byte per campione
+    num_frames = len(pcm_data) // frame_size
+    if num_frames == 0:
+        return pcm_data
+
+    out_samples = bytearray()
+    batch_size = 10_000
+
+    try:
+        for i in range(0, num_frames, batch_size):
+            chunk_frames = min(batch_size, num_frames - i)
+            sub_data = pcm_data[i * frame_size : (i + chunk_frames) * frame_size]
+            fmt = f"<{chunk_frames * 2}h"
+            unpacked = struct.unpack(fmt, sub_data)
+
+            # Decimazione per 3 (da 48kHz a 16kHz) e media dei canali stereo in mono
+            for f_idx in range(0, len(unpacked), 6):
+                if f_idx + 1 < len(unpacked):
+                    left = unpacked[f_idx]
+                    right = unpacked[f_idx + 1]
+                    mono = (left + right) // 2
+                    out_samples.extend(struct.pack("<h", mono))
+    except Exception:
+        logger.exception("Errore durante la conversione PCM, uso i dati originali")
+        return pcm_data
+
+    return bytes(out_samples)
 
 
 class _SpeechCapture(voice_recv.AudioSink):
@@ -100,12 +138,13 @@ class _SpeechCapture(voice_recv.AudioSink):
 
 
 def _to_wav(pcm: bytes) -> io.BytesIO:
+    processed_pcm = convert_pcm_48k_stereo_to_16k_mono(pcm)
     audio_file = io.BytesIO()
     with wave.open(audio_file, "wb") as wav_file:
-        wav_file.setnchannels(AUDIO_CHANNELS)
+        wav_file.setnchannels(1)  # Mono ottimizzato per Whisper
         wav_file.setsampwidth(AUDIO_SAMPLE_WIDTH)
-        wav_file.setframerate(AUDIO_SAMPLE_RATE)
-        wav_file.writeframes(pcm)
+        wav_file.setframerate(16_000)  # 16 kHz ottimizzato per Whisper
+        wav_file.writeframes(processed_pcm)
     audio_file.seek(0)
     return audio_file
 
@@ -196,8 +235,7 @@ class TvCommand(commands.Cog):
         status = "Tempo scaduto: non ho sentito «TV», «televisore» o «televisione»."
         try:
             await interaction.response.send_message(
-                "Avvio l'ascolto per un massimo di 5 minuti. I segmenti audio del "
-                "canale saranno inviati a OpenAI Whisper per la trascrizione in italiano.",
+                "Avvio l'ascolto per un massimo di 5 minuti. Audio convertito a 16kHz mono per Whisper.",
             )
             voice_client = await caller.voice.channel.connect(
                 cls=voice_recv.VoiceRecvClient
@@ -216,7 +254,14 @@ class TvCommand(commands.Cog):
                         language="it",
                         prompt=TRANSCRIPTION_PROMPT,
                     )
-                    if KEYWORD_PATTERN.search(transcript.text):
+                    
+                    # Log della trascrizione per facilitare il debug
+                    text = transcript.text.strip()
+                    logger.info(f"Whisper trascrizione ricevuta: '{text}'")
+                    print(f"[DEBUG WHISPER] Trascrizione: '{text}'")
+
+                    if KEYWORD_PRINTED := KEYWORD_PATTERN.search(text):
+                        logger.info(f"Parola chiave rilevata: {KEYWORD_PRINTED.group(0)}")
                         return True
 
             async def flush_partial_audio() -> None:
